@@ -12,38 +12,64 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d7f3f6702b0e2894c84fdc9d948c8aff, type: 3}
   m_Name: BattleConfig
   m_EditorClassIdentifier: 
-  playerBaseHealth: 20
-  playerBaseQiPoints: 7
+  playerBaseHealth: 40
   enemyBaseHealth: 40
-  enemyBaseAttack: 3
-  yangShengAttackMultiplier: 2.75
-  yangShengDefenseMultiplier: 1.25
-  yinShengDefenseMultiplier: 2.5
-  balanceMultiplier: 1.25
-  criticalYangAttackMultiplier: 1.75
-  criticalYangDefenseMultiplier: 1.25
-  criticalYinAttackMultiplier: 1.25
-  criticalYinDefenseMultiplier: 1.75
-  extremeYangAttackMultiplier: 4.5
-  extremeYangDefenseMultiplier: 0.5
-  extremeYinDefenseMultiplier: 3
-  criticalStacksRequired: 3
-  maxLogLines: 5
-  maxLogEntriesPerTurn: 5
-  attackAnimationDuration: 0.5
-  damageAnimationDuration: 0.3
-  attackSound: {fileID: 0}
-  damageSound: {fileID: 0}
-  chargeSound: {fileID: 0}
-  defenseSound: {fileID: 0}
-  victorySound: {fileID: 0}
-  defeatSound: {fileID: 0}
-  yangStackIcon: {fileID: 21300000, guid: 1090205839460054d924b872d3d1611b, type: 3}
-  yinStackIcon: {fileID: 21300000, guid: d9a1389bc6d34fa44951dfeb38cdaf55, type: 3}
-  extremeYangDebuffIcon: {fileID: 21300000, guid: ba20540a3041b484abd8394855134975, type: 3}
-  extremeYinDebuffIcon: {fileID: 21300000, guid: 7331c51471c567a439d3140ee16b3f35, type: 3}
-  playerDotIcon: {fileID: 21300000, guid: da70c76bea5c848d68d7f0f872362fda, type: 3}
-  enemyDotIcon: {fileID: 21300000, guid: 073d571eae7224d8fa77ff3714054604, type: 3}
-  counterStrikeIcon: {fileID: 21300000, guid: c7cd0aeb795a0384a9fa6ad74a7aaebc, type: 3}
-  yangPenetrationIcon: {fileID: 21300000, guid: a061c3a2654774fb68847ee59bdaede4, type: 3}
-  yinCoverIcon: {fileID: 21300000, guid: ee7176fc46a3beb498fead57ba0d84cb, type: 3}
+  enemyBaseAttack: 5
+  defaultEnemy:
+    health: 40
+    attack: 5
+    defense: 0
+    enemyId: 0
+  secondEnemy:
+    health: 60
+    attack: 6
+    defense: 0
+    enemyId: 1
+  thirdEnemy:
+    health: 70
+    attack: 9
+    defense: 0
+    enemyId: 2
+  secondEnemyDefenseReduction: 0.3
+  maxPoints: 7
+  balanceMultipliers: {x: 1.25, y: 1.25}
+  criticalYangMultipliers: {x: 1.75, y: 1.25}
+  criticalYinMultipliers: {x: 1.25, y: 1.75}
+  yangProsperityMultipliers: {x: 2.75, y: 1.25}
+  yinProsperityMultipliers: {x: 1, y: 2.5}
+  extremeYangMultipliers: {x: 4.5, y: 0.5}
+  extremeYinMultipliers: {x: 1, y: 3}
+  ultimateQiMultipliers: {x: 7, y: 7}
+  balanceHealAmount: 5
+  balanceHealCooldown: 2
+  counterStrikeSuccessMultiplier: 1
+  counterStrikeFailureMultiplier: 1.5
+  counterStrikeFailureDotDamage: 2
+  counterStrikeFailureDotDuration: 2
+  extremeYinCounterStrikeDuration: 1
+  yinProsperityCounterStrikeDuration: 1
+  ultimateQiCounterStrikeDuration: 3
+  extremeStacksRequired: 3
+  extremeYangBonusPerStack: 2
+  extremeYinAttackReducePerStack: 2
+  extremeDebuffDuration: 2
+  ultimateQiHealthSet: 1
+  pointsRetentionFactor: 0.5
+  turnIndicatorDuration: 1
+  playerSetupDelay: 1
+  enemyTurnDelay: 1
+  backgroundMusic: {fileID: 8300000, guid: e6a9667fbc46bb244b349a2730903812, type: 3}
+  playerAttackSound: {fileID: 8300000, guid: 17fb9abac4765404888c6b824771d0e8, type: 3}
+  playerHitSound: {fileID: 8300000, guid: f7a822832f3ac3b46845565b7f2d77a5, type: 3}
+  enemyAttackSound: {fileID: 8300000, guid: 4ef29af804499674d9467aa0f35d16b0, type: 3}
+  enemyHitSound: {fileID: 8300000, guid: 90d80a1631e94d34093d834e9fe8c11d, type: 3}
+  enemySkillSound: {fileID: 8300000, guid: 8a32678b75b98d847bd45b37da42cd0b, type: 3}
+  victorySound: {fileID: 8300000, guid: b3a34fbbe8d7edb4fa7046fcaa659105, type: 3}
+  defeatSound: {fileID: 8300000, guid: 3baafbd8696ec11488dc5e30e0c79c2d, type: 3}
+  playerAttackSoundDelay: 0.4
+  playerHitSoundDelay: 0.3
+  enemyAttackSoundDelay: 0
+  enemyHitSoundDelay: 0.3
+  enemySkillSoundDelay: 0.2
+  playerToEnemyHitDelay: 0
+  enemyToPlayerHitDelay: 0

@@ -1,4 +1,4 @@
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.SceneManagement;
 using System.Collections;
 using System.Collections.Generic;
@@ -10,16 +10,16 @@ public class LevelProgressController : MonoBehaviour
     [System.Serializable]
     public class LevelInfo
     {
-        public string scenePath;        // ³¡¾°Â·¾¶
-        public bool isUnlocked;         // ÊÇ·ñ½âËø
-        public bool isCompleted;        // ÊÇ·ñÍê³É
+        public string scenePath;        // åœºæ™¯è·¯å¾„
+        public bool isUnlocked;         // æ˜¯å¦è§£é”
+        public bool isCompleted;        // æ˜¯å¦å®Œæˆ
     }
 
-    [Header("¹Ø¿¨ÁĞ±íÉèÖÃ")]
+    [Header("å…³å¡åˆ—è¡¨è®¾ç½®")]
     public List<LevelInfo> levels = new List<LevelInfo>();
 
     private int currentActiveLevel = -1;
-    private bool isInitialized = false; // ±ê¼ÇÊÇ·ñÒÑ³õÊ¼»¯
+    private bool isInitialized = false; // æ ‡è®°æ˜¯å¦å·²åˆå§‹åŒ–
 
     void Awake()
     {
@@ -27,9 +27,9 @@ public class LevelProgressController : MonoBehaviour
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
-            Debug.Log("¹Ø¿¨¹ÜÀíÆ÷³õÊ¼»¯Íê³É");
+            Debug.Log("å…³å¡ç®¡ç†å™¨åˆå§‹åŒ–å®Œæˆ");
 
-            // ³õÊ¼»¯¹Ø¿¨×´Ì¬
+            // åˆå§‹åŒ–å…³å¡çŠ¶æ€
             InitializeLevelStates();
         }
         else
@@ -38,31 +38,31 @@ public class LevelProgressController : MonoBehaviour
         }
     }
 
-    // ³õÊ¼»¯¹Ø¿¨×´Ì¬£¨¹Ø¼üĞŞ¸´£©
+    // åˆå§‹åŒ–å…³å¡çŠ¶æ€ï¼ˆå…³é”®ä¿®å¤ï¼‰
     private void InitializeLevelStates()
     {
-        // È·±£Ö»³õÊ¼»¯Ò»´Î
+        // ç¡®ä¿åªåˆå§‹åŒ–ä¸€æ¬¡
         if (isInitialized) return;
         isInitialized = true;
 
-        // Èç¹ûÃ»ÓĞ¹Ø¿¨£¬Ö±½Ó·µ»Ø
+        // å¦‚æœæ²¡æœ‰å…³å¡ï¼Œç›´æ¥è¿”å›
         if (levels.Count == 0) return;
 
-        // È·±£µÚÒ»¹Ø½âËø
+        // ç¡®ä¿ç¬¬ä¸€å…³è§£é”
         levels[0].isUnlocked = true;
         levels[0].isCompleted = false;
 
-        // Ëø¶¨ÆäËû¹Ø¿¨
+        // é”å®šå…¶ä»–å…³å¡
         for (int i = 1; i < levels.Count; i++)
         {
             levels[i].isUnlocked = false;
             levels[i].isCompleted = false;
         }
 
-        Debug.Log("¹Ø¿¨×´Ì¬³õÊ¼»¯Íê³É£ºµÚÒ»¹Ø½âËø£¬ÆäËûËø¶¨");
+        Debug.Log("å…³å¡çŠ¶æ€åˆå§‹åŒ–å®Œæˆï¼šç¬¬ä¸€å…³è§£é”ï¼Œå…¶ä»–é”å®š");
     }
 
-    // Ìí¼ÓĞÂ¹Ø¿¨
+    // æ·»åŠ æ–°å…³å¡
     public void AddLevel(string scenePath, bool isUnlocked = false, bool isCompleted = false)
     {
         if (!LevelExists(scenePath))
@@ -73,56 +73,56 @@ public class LevelProgressController : MonoBehaviour
                 isUnlocked = isUnlocked,
                 isCompleted = isCompleted
             });
-            Debug.Log($"Ìí¼ÓĞÂ¹Ø¿¨: {scenePath}");
+            Debug.Log($"æ·»åŠ æ–°å…³å¡: {scenePath}");
         }
     }
 
-    // ¼ì²é¹Ø¿¨ÊÇ·ñ´æÔÚ
+    // æ£€æŸ¥å…³å¡æ˜¯å¦å­˜åœ¨
     public bool LevelExists(string scenePath)
     {
         return levels.Exists(l => l.scenePath == scenePath);
     }
 
-    // »ñÈ¡¹Ø¿¨ĞÅÏ¢
+    // è·å–å…³å¡ä¿¡æ¯
     public LevelInfo GetLevelInfo(string scenePath)
     {
         return levels.Find(l => l.scenePath == scenePath);
     }
 
-    // ¼ÓÔØ¹Ø¿¨
+    // åŠ è½½å…³å¡
     public void LoadLevel(string scenePath)
     {
         LevelInfo level = GetLevelInfo(scenePath);
 
-        // ¹Ø¿¨Î´ÅäÖÃÊ±×Ô¶¯Ìí¼Ó
+        // å…³å¡æœªé…ç½®æ—¶è‡ªåŠ¨æ·»åŠ 
         if (level == null)
         {
-            // ĞÂ¹Ø¿¨Ä¬ÈÏËø¶¨
+            // æ–°å…³å¡é»˜è®¤é”å®š
             AddLevel(scenePath, false);
             level = GetLevelInfo(scenePath);
         }
 
         if (!level.isUnlocked)
         {
-            Debug.LogWarning($"¹Ø¿¨ {scenePath} ÉĞÎ´½âËø");
+            Debug.LogWarning($"å…³å¡ {scenePath} å°šæœªè§£é”");
             return;
         }
 
         if (level.isCompleted)
         {
-            Debug.LogWarning($"¹Ø¿¨ {scenePath} ÒÑÍê³É");
+            Debug.LogWarning($"å…³å¡ {scenePath} å·²å®Œæˆ");
             return;
         }
 
-        // ±ê¼Çµ±Ç°¼¤»î¹Ø¿¨
+        // æ ‡è®°å½“å‰æ¿€æ´»å…³å¡
         currentActiveLevel = levels.IndexOf(level);
-        Debug.Log($"¿ªÊ¼¹Ø¿¨: {scenePath}");
+        Debug.Log($"å¼€å§‹å…³å¡: {scenePath}");
 
-        // ¼ÓÔØ³¡¾°
+        // åŠ è½½åœºæ™¯
         GameManager.Instance.LoadLevel(scenePath);
     }
 
-    // Íê³Éµ±Ç°¹Ø¿¨
+    // å®Œæˆå½“å‰å…³å¡
     public void CompleteCurrentLevel()
     {
         if (currentActiveLevel >= 0 && currentActiveLevel < levels.Count)
@@ -130,19 +130,19 @@ public class LevelProgressController : MonoBehaviour
             LevelInfo level = levels[currentActiveLevel];
             level.isCompleted = true;
 
-            // ½âËøÏÂÒ»¹Ø£¨Èç¹ûÓĞ£©
+            // è§£é”ä¸‹ä¸€å…³ï¼ˆå¦‚æœæœ‰ï¼‰
             if (currentActiveLevel + 1 < levels.Count)
             {
                 levels[currentActiveLevel + 1].isUnlocked = true;
-                Debug.Log($"½âËøĞÂ¹Ø¿¨: {levels[currentActiveLevel + 1].scenePath}");
+                Debug.Log($"è§£é”æ–°å…³å¡: {levels[currentActiveLevel + 1].scenePath}");
             }
 
-            Debug.Log($"Íê³É¹Ø¿¨: {level.scenePath}");
+            Debug.Log($"å®Œæˆå…³å¡: {level.scenePath}");
             currentActiveLevel = -1;
         }
     }
 
-    // Ë¢ĞÂËùÓĞ°´Å¥×´Ì¬
+    // åˆ·æ–°æ‰€æœ‰æŒ‰é’®çŠ¶æ€
     public void RefreshAllButtons()
     {
         LevelButton[] buttons = FindObjectsOfType<LevelButton>();
