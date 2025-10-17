@@ -7,29 +7,6 @@ public class GameManager : MonoBehaviour
 {
     public static GameManager Instance;
 
-    [Header("黑屏过渡效果")]
-    public Image fadeImage;
-    public float fadeDuration = 1.0f;
-
-    void Awake()
-    {
-        if (Instance == null)
-        {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-
-            // 初始化黑屏效果
-            if (fadeImage != null)
-                fadeImage.color = Color.clear;
-
-            Debug.Log("GameManager初始化完成");
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
-    }
-
     // ===== 核心场景加载方法 =====
 
     public void LoadMainMenu() => LoadScene("MainMenu");
@@ -39,7 +16,6 @@ public class GameManager : MonoBehaviour
     // 动态关卡加载方法
     public void LoadLevel(string scenePath)
     {
-        // 直接加载场景
         LoadScene(scenePath);
     }
 
@@ -58,51 +34,43 @@ public class GameManager : MonoBehaviour
 
     private void LoadScene(string sceneName)
     {
-        StartCoroutine(SceneTransitionCoroutine(sceneName));
-    }
+        // ✅ 查找当前场景的 SceneTransitionManager
+        SceneTransitionManager transition = FindObjectOfType<SceneTransitionManager>();
 
-    private IEnumerator SceneTransitionCoroutine(string sceneName)
-    {
-        // 淡入黑屏
-        if (fadeImage != null)
+        if (transition != null && transition.fadeImage != null)
         {
-            yield return StartCoroutine(FadeCoroutine(Color.clear, Color.black, fadeDuration));
+            // 使用过渡管理器加载场景
+            transition.LoadSceneWithTransition(sceneName);
         }
-
-        // 加载新场景
-        SceneManager.LoadScene(sceneName);
-
-        // 如果是地图场景，刷新所有关卡按钮状态
-        if (sceneName == "MapScene")
+        else
         {
-            yield return new WaitForSeconds(0.1f);
-            if (LevelProgressController.Instance != null)
-            {
-                LevelProgressController.Instance.RefreshAllButtons();
-            }
-        }
-
-        // 淡出恢复
-        if (fadeImage != null)
-        {
-            yield return StartCoroutine(FadeCoroutine(Color.black, Color.clear, fadeDuration));
+            // 降级：无过渡直接加载（调试用）
+            Debug.LogWarning("未找到 SceneTransitionManager 或 fadeImage，直接加载场景: " + sceneName);
+            SceneManager.LoadScene(sceneName);
         }
     }
 
-    // 渐变效果
-    private IEnumerator FadeCoroutine(Color startColor, Color endColor, float duration)
+    // ✅ 新增：退出游戏（供 Button 调用）
+    public void Quit()
     {
-        float timeElapsed = 0;
-        while (timeElapsed < duration)
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
+
+    void Awake()
+    {
+        if (Instance == null)
         {
-            if (fadeImage != null)
-                fadeImage.color = Color.Lerp(startColor, endColor, timeElapsed / duration);
-
-            timeElapsed += Time.deltaTime;
-            yield return null;
+            Instance = this;
+            // ❌ 已移除 DontDestroyOnLoad —— GameManager 将随场景切换被正常销毁
+            Debug.Log("GameManager初始化完成");
         }
-
-        if (fadeImage != null)
-            fadeImage.color = endColor;
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 }
