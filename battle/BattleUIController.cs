@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 using System.Collections.Generic;
+using System.Text;
 
 public class BattleUIController : MonoBehaviour
 {
@@ -38,7 +39,9 @@ public class BattleUIController : MonoBehaviour
 
     private int yinPoints = 0;
     private int yangPoints = 0;
+    private List<string> battleLog = new List<string>();
     private const int MAX_LOG_LINES = 10;
+    private string lastLog = ""; // 记录上一条日志
 
     void Start()
     {
@@ -47,10 +50,8 @@ public class BattleUIController : MonoBehaviour
         UpdateUI();
     }
 
-    // Bind UI events
     void BindEvents()
     {
-        // Set button listeners
         endTurnButton.onClick.AddListener(OnEndTurnClick);
 
         increaseYinBtn.onClick.AddListener(() => AdjustYin(1));
@@ -58,13 +59,11 @@ public class BattleUIController : MonoBehaviour
         increaseYangBtn.onClick.AddListener(() => AdjustYang(1));
         decreaseYangBtn.onClick.AddListener(() => AdjustYang(-1));
 
-        // Bind battle system events
         battleSystem.onPlayerTurnStart.AddListener(OnPlayerTurnStart);
         battleSystem.onDamageCalculated.AddListener(UpdateUI);
         battleSystem.onBattleLog.AddListener(UpdateBattleLog);
     }
 
-    // Handle start of player's turn
     void OnPlayerTurnStart()
     {
         yinPoints = 0;
@@ -73,7 +72,6 @@ public class BattleUIController : MonoBehaviour
         UpdateUI();
     }
 
-    // Adjust yin point allocation
     void AdjustYin(int amount)
     {
         int newYin = Mathf.Clamp(yinPoints + amount, 0, playerData.qiPoints - yangPoints);
@@ -82,7 +80,6 @@ public class BattleUIController : MonoBehaviour
         UpdateUI();
     }
 
-    // Adjust yang point allocation
     void AdjustYang(int amount)
     {
         int newYang = Mathf.Clamp(yangPoints + amount, 0, playerData.qiPoints - yinPoints);
@@ -91,18 +88,14 @@ public class BattleUIController : MonoBehaviour
         UpdateUI();
     }
 
-    // Handle end turn button click
     void OnEndTurnClick()
     {
-        // Apply allocated points to player stats
         playerData.defense = yinPoints;
         playerData.attack = yangPoints;
 
-        // End player turn - FIXED REFERENCE
         battleSystem.EndPlayerTurn();
     }
 
-    // Reset preview values
     void ResetPreviewValues()
     {
         if (previewAttack != null) previewAttack.text = "ATK: 0";
@@ -110,7 +103,6 @@ public class BattleUIController : MonoBehaviour
         if (previewState != null) previewState.text = "Balance";
     }
 
-    // Update UI elements
     public void UpdateUI()
     {
         if (playerData == null || enemyData == null) return;
@@ -130,7 +122,6 @@ public class BattleUIController : MonoBehaviour
         SetButtonStates(remainingQi);
     }
 
-    // Set button interaction states
     void SetButtonStates(int remainingQi)
     {
         if (increaseYinBtn == null || increaseYangBtn == null) return;
@@ -142,20 +133,82 @@ public class BattleUIController : MonoBehaviour
 
         if (endTurnButton != null)
         {
-            endTurnButton.interactable = battleSystem.currentState == BattleSystem.BattleState.PlayerTurn;
+            // 检查是否可以结束回合（极端状态叠层是否满足）
+            bool canEndTurn = CanEndTurn();
+            endTurnButton.interactable = battleSystem.currentState == BattleSystem.BattleState.PlayerTurn && canEndTurn;
+
+            // 如果无法结束回合，添加提示
+            if (!canEndTurn)
+            {
+                // 使用BattleSystem的AddLog方法添加日志
+                battleSystem.AddLog("Cannot end turn: Need more critical stacks to unlock extreme states");
+            }
         }
     }
 
-    // Update battle log display
+    // 检查是否可以结束回合（极端状态叠层是否满足）
+    bool CanEndTurn()
+    {
+        // 计算阴阳差
+        int diff = yangPoints - yinPoints;
+
+        // 检查是否满足极端阳状态条件但叠层不足
+        if (diff >= 5 && playerData.extremeYangStack < 3)
+        {
+            return false;
+        }
+
+        // 检查是否满足极端阴状态条件但叠层不足
+        if (diff <= -5 && playerData.extremeYinStack < 3)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    // 添加日志方法（修复错误）
+    void AddLog(string message)
+    {
+        // 避免重复日志
+        if (battleLog.Count > 0 && battleLog[battleLog.Count - 1] == message)
+        {
+            return;
+        }
+
+        battleLog.Add(message);
+
+        while (battleLog.Count > MAX_LOG_LINES)
+        {
+            battleLog.RemoveAt(0);
+        }
+
+        UpdateBattleLogDisplay();
+    }
+
+    void UpdateBattleLogDisplay()
+    {
+        if (battleLogText == null) return;
+
+        StringBuilder formattedLog = new StringBuilder();
+        foreach (string line in battleLog)
+        {
+            formattedLog.AppendLine(line);
+        }
+
+        battleLogText.text = formattedLog.ToString();
+    }
+
     void UpdateBattleLog(string log)
     {
-        if (battleLogText != null)
-        {
-            battleLogText.text = log;
-        }
+        // 避免重复日志
+        if (lastLog == log) return;
+        lastLog = log;
+
+        // 使用本地的AddLog方法
+        AddLog(log);
     }
 
-    // Update preview stats based on allocated points
     void UpdatePreviewStats()
     {
         int tempYin = yinPoints;
@@ -165,23 +218,51 @@ public class BattleUIController : MonoBehaviour
         int defense = tempYin;
         string stateName = "Default";
         string stateColor = "white";
+        bool stateLocked = false; // 状态是否锁定
 
         int diff = tempYang - tempYin;
 
+        // 1. 极端阳状态 (阳-阴 ≥ 5)
         if (diff >= 5)
         {
-            attack = Mathf.FloorToInt(battleSystem.config.extremeYangAttackMultiplier * tempYang);
-            defense = Mathf.FloorToInt(battleSystem.config.extremeYangDefenseMultiplier * tempYin);
-            stateName = "Extreme Yang";
-            stateColor = "orange";
+            // 检查极端阳叠层是否满足
+            if (playerData.extremeYangStack < 3)
+            {
+                stateName = "Extreme Yang (Locked)";
+                stateColor = "gray";
+                attack = tempYang;
+                defense = tempYin;
+                stateLocked = true;
+            }
+            else
+            {
+                attack = Mathf.FloorToInt(battleSystem.config.extremeYangAttackMultiplier * tempYang);
+                defense = Mathf.FloorToInt(battleSystem.config.extremeYangDefenseMultiplier * tempYin);
+                stateName = "Extreme Yang";
+                stateColor = "orange";
+            }
         }
+        // 2. 极端阴状态 (阴-阳 ≥ 5)
         else if (diff <= -5)
         {
-            attack = tempYang;
-            defense = Mathf.FloorToInt(battleSystem.config.extremeYinDefenseMultiplier * tempYin);
-            stateName = "Extreme Yin";
-            stateColor = "purple";
+            // 检查极端阴叠层是否满足
+            if (playerData.extremeYinStack < 3)
+            {
+                stateName = "Extreme Yin (Locked)";
+                stateColor = "gray";
+                attack = tempYang;
+                defense = tempYin;
+                stateLocked = true;
+            }
+            else
+            {
+                attack = tempYang;
+                defense = Mathf.FloorToInt(battleSystem.config.extremeYinDefenseMultiplier * tempYin);
+                stateName = "Extreme Yin";
+                stateColor = "purple";
+            }
         }
+        // 3. 阳盛状态 (阳-阴 = 3 or 4)
         else if (diff >= 3)
         {
             attack = Mathf.FloorToInt(battleSystem.config.yangShengAttackMultiplier * tempYang);
@@ -189,6 +270,7 @@ public class BattleUIController : MonoBehaviour
             stateName = "Yang Sheng";
             stateColor = "orange";
         }
+        // 4. 阴盛状态 (阴-阳 = 3 or 4)
         else if (diff <= -3)
         {
             attack = tempYang;
@@ -196,6 +278,7 @@ public class BattleUIController : MonoBehaviour
             stateName = "Yin Sheng";
             stateColor = "purple";
         }
+        // 5. 临界阳状态 (阳-阴 = 2)
         else if (diff == 2)
         {
             attack = Mathf.FloorToInt(battleSystem.config.criticalYangAttackMultiplier * tempYang);
@@ -203,6 +286,7 @@ public class BattleUIController : MonoBehaviour
             stateName = "Critical Yang";
             stateColor = "orange";
         }
+        // 6. 临界阴状态 (阴-阳 = 2)
         else if (diff == -2)
         {
             attack = Mathf.FloorToInt(battleSystem.config.criticalYinAttackMultiplier * tempYang);
@@ -210,6 +294,7 @@ public class BattleUIController : MonoBehaviour
             stateName = "Critical Yin";
             stateColor = "purple";
         }
+        // 7. 平衡状态 (阳-阴的绝对值 = 0 or 1)
         else if (Mathf.Abs(diff) <= 1)
         {
             attack = Mathf.FloorToInt(battleSystem.config.balanceMultiplier * tempYang);
@@ -225,9 +310,14 @@ public class BattleUIController : MonoBehaviour
             stateColor = "white";
         }
 
-        // Update preview displays
         if (previewAttack != null) previewAttack.text = $"ATK: {attack}";
         if (previewDefense != null) previewDefense.text = $"DEF: {defense}";
         if (previewState != null) previewState.text = $"<color={stateColor}>{stateName}</color>";
+
+        // 如果状态锁定，禁用End按钮
+        if (stateLocked)
+        {
+            endTurnButton.interactable = false;
+        }
     }
 }

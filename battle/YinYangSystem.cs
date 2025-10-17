@@ -7,189 +7,163 @@ public class YinYangSystem : MonoBehaviour
 
     public void ApplyBattleEffects(PlayerData player, EnemyData enemy, BattleConfig config)
     {
-        // Reset combat effects
-        player.counterStrikeActive = false;
-        player.counterStrikeMultiplier = 1.0f;
-
         int yinPoints = player.defense;
         int yangPoints = player.attack;
-        int diff = yangPoints - yinPoints;
+        int diff = yangPoints - yinPoints; // 阳点数 - 阴点数
 
         int originalYin = yinPoints;
         int originalYang = yangPoints;
 
-        // 1. Extreme Yang (Yang - Yin >= 5)
+        // 1. 极端阳状态 (阳-阴 ≥ 5)
         if (diff >= 5)
         {
-            currentStateName = "Extreme Yang";
-
-            // Calculate combat stats
-            player.attack = Mathf.FloorToInt(config.extremeYangAttackMultiplier * originalYang);
-            player.defense = Mathf.FloorToInt(config.extremeYangDefenseMultiplier * originalYin);
-
-            // Check critical yang counter
-            if (player.yangCriticalCounter >= config.criticalStacksRequired)
+            // 检查极端阳叠层是否满足
+            if (player.extremeYangStack >= 3)
             {
-                // Explode yang penetrate stacks
-                int yangDamage = enemy.yangPenetrateStacks * originalYang;
-                enemy.health = Mathf.Max(0, enemy.health - yangDamage);
-                BattleEventSystem.OnBattleLog.Invoke($"Exploded Yang Penetration! Dealt {yangDamage} damage");
+                currentStateName = "Extreme Yang";
 
-                // Set next turn debuff
+                // 计算攻击防御值
+                player.attack = Mathf.FloorToInt(config.extremeYangAttackMultiplier * originalYang);
+                player.defense = Mathf.FloorToInt(config.extremeYangDefenseMultiplier * originalYin);
+
+                // 重置叠层
+                player.ResetExtremeYangStack();
+                BattleEventSystem.OnBattleLog.Invoke("Extreme Yang activated!");
+
+                // 设置下回合攻击下降
                 player.nextTurnAttackDebuff = true;
-                BattleEventSystem.OnBattleLog.Invoke("Extreme Yang activated! Player attack halved next turn");
-
-                // Reset counters
-                player.ResetCriticalCounters();
-                enemy.yangPenetrateStacks = 0;
             }
             else
             {
-                // Not enough critical stacks
-                int required = config.criticalStacksRequired - player.yangCriticalCounter;
-                BattleEventSystem.OnBattleLog.Invoke($"Needs {required} more Critical Yang usages for explosion");
-                currentStateName = "Extreme Yang (Inactive)";
+                // 叠层不足无法激活
+                currentStateName = "Extreme Yang (Locked)";
+                player.attack = originalYang;
+                player.defense = originalYin;
+                BattleEventSystem.OnBattleLog.Invoke($"Extreme Yang locked! Requires 3 critical yang stacks (current: {player.extremeYangStack}/3)");
             }
             return;
         }
 
-        // 2. Extreme Yin (Yin - Yang >= 5)
+        // 2. 极端阴状态 (阴-阳 ≥ 5)
         if (diff <= -5)
         {
-            currentStateName = "Extreme Yin";
-
-            // Calculate combat stats
-            player.attack = originalYang;
-            player.defense = Mathf.FloorToInt(config.extremeYinDefenseMultiplier * originalYin);
-
-            // Activate counter strike
-            player.ActivateCounterStrike(1.5f);
-
-            // Check critical yin counter
-            if (player.yinCriticalCounter >= config.criticalStacksRequired)
+            // 检查极端阴叠层是否满足
+            if (player.extremeYinStack >= 3)
             {
-                // Explode yin cover stacks
-                int attackReduction = enemy.yinCoverStacks * 2;
-                enemy.baseAttack = Mathf.Max(0, enemy.baseAttack - attackReduction);
-                enemy.currentAttack = enemy.baseAttack;
-                BattleEventSystem.OnBattleLog.Invoke($"Exploded Yin Cover! Enemy ATK reduced by {attackReduction}");
+                currentStateName = "Extreme Yin";
 
-                // Set next turn debuff
+                // 计算攻击防御值
+                player.attack = originalYang;
+                player.defense = Mathf.FloorToInt(config.extremeYinDefenseMultiplier * originalYin);
+
+                // 重置叠层
+                player.ResetExtremeYinStack();
+                BattleEventSystem.OnBattleLog.Invoke("Extreme Yin activated!");
+
+                // 设置下回合防御下降
                 player.nextTurnDefenseDebuff = true;
-                BattleEventSystem.OnBattleLog.Invoke("Extreme Yin activated! Player defense halved next turn");
 
-                // Reset counters
-                player.ResetCriticalCounters();
-                enemy.yinCoverStacks = 0;
+                // 激活反震效果
+                player.ActivateCounterStrike(1.5f);
+                BattleEventSystem.OnBattleLog.Invoke("Extreme Yin activated! Counterstrike effect applied");
             }
             else
             {
-                // Not enough critical stacks
-                int required = config.criticalStacksRequired - player.yinCriticalCounter;
-                BattleEventSystem.OnBattleLog.Invoke($"Needs {required} more Critical Yin usages for explosion");
-                currentStateName = "Extreme Yin (Inactive)";
+                // 叠层不足无法激活
+                currentStateName = "Extreme Yin (Locked)";
+                player.attack = originalYang;
+                player.defense = originalYin;
+                BattleEventSystem.OnBattleLog.Invoke($"Extreme Yin locked! Requires 3 critical yin stacks (current: {player.extremeYinStack}/3)");
             }
             return;
         }
 
-        // 3. Yang Sheng (Yang - Yin = 3 or 4)
-        if (diff >= 3 && diff <= 4)
+        // 3. 阳盛状态 (阳-阴 = 3 or 4)
+        if (diff >= 3)
         {
             currentStateName = "Yang Sheng";
 
-            // Calculate combat stats
+            // 计算攻击防御值
             player.attack = Mathf.FloorToInt(config.yangShengAttackMultiplier * originalYang);
             player.defense = Mathf.FloorToInt(config.yangShengDefenseMultiplier * originalYin);
 
-            // Apply DOT
-            int dotDamage = Mathf.FloorToInt(originalYang / 2f);
-            if (dotDamage > 0)
-            {
-                player.activeDots.Add(new PlayerData.DotEffect
-                {
-                    damage = dotDamage,
-                    duration = 2
-                });
-                BattleEventSystem.OnBattleLog.Invoke($"Applied Yang Sheng DOT: {dotDamage} damage per turn for 2 turns");
-            }
+            BattleEventSystem.OnBattleLog.Invoke("Yang Sheng activated!");
             return;
         }
 
-        // 4. Yin Sheng (Yin - Yang = 3 or 4)
-        if (diff <= -3 && diff >= -4)
+        // 4. 阴盛状态 (阴-阳 = 3 or 4)
+        if (diff <= -3)
         {
             currentStateName = "Yin Sheng";
 
-            // Calculate combat stats
+            // 计算攻击防御值
             player.attack = originalYang;
             player.defense = Mathf.FloorToInt(config.yinShengDefenseMultiplier * originalYin);
 
-            // Activate counter strike
+            // 激活反震效果
             player.ActivateCounterStrike(1.0f);
             BattleEventSystem.OnBattleLog.Invoke("Yin Sheng activated! Counterstrike effect applied");
             return;
         }
 
-        // 5. Critical Yang (Yang - Yin = 2)
+        // 5. 临界阳状态 (阳-阴 = 2)
         if (diff == 2)
         {
             currentStateName = "Critical Yang";
 
-            // Calculate combat stats
+            // 计算攻击防御值
             player.attack = Mathf.FloorToInt(config.criticalYangAttackMultiplier * originalYang);
             player.defense = Mathf.FloorToInt(config.criticalYangDefenseMultiplier * originalYin);
 
-            // Apply buffs and increment counter
-            enemy.yangPenetrateStacks++;
+            // 增加临界阳计数器和极端阳叠层
             player.IncrementYangCriticalCounter();
-            BattleEventSystem.OnBattleLog.Invoke($"Applied Yang Penetration! (Stacks: {enemy.yangPenetrateStacks}, Counter: {player.yangCriticalCounter}/{config.criticalStacksRequired})");
+            BattleEventSystem.OnBattleLog.Invoke($"Critical Yang applied! (Yang Critical Stacks: {player.yangCriticalCounter}, Extreme Yang Stacks: {player.extremeYangStack}/3)");
             return;
         }
 
-        // 6. Critical Yin (Yin - Yang = 2)
+        // 6. 临界阴状态 (阴-阳 = 2)
         if (diff == -2)
         {
             currentStateName = "Critical Yin";
 
-            // Calculate combat stats
+            // 计算攻击防御值
             player.attack = Mathf.FloorToInt(config.criticalYinAttackMultiplier * originalYang);
             player.defense = Mathf.FloorToInt(config.criticalYinDefenseMultiplier * originalYin);
 
-            // Apply buffs and increment counter
-            enemy.yinCoverStacks++;
+            // 增加临界阴计数器和极端阴叠层
             player.IncrementYinCriticalCounter();
-            BattleEventSystem.OnBattleLog.Invoke($"Applied Yin Cover! (Stacks: {enemy.yinCoverStacks}, Counter: {player.yinCriticalCounter}/{config.criticalStacksRequired})");
+            BattleEventSystem.OnBattleLog.Invoke($"Critical Yin applied! (Yin Critical Stacks: {player.yinCriticalCounter}, Extreme Yin Stacks: {player.extremeYinStack}/3)");
 
-            // Activate counter strike
+            // 激活反震效果
             player.ActivateCounterStrike(1.0f);
             return;
         }
 
-        // 7. Balance (|Yang - Yin| <= 1)
+        // 7. 平衡状态 (阳-阴的绝对值 = 0 or 1)
         if (Mathf.Abs(diff) <= 1)
         {
             currentStateName = "Balance";
 
-            // Calculate combat stats
+            // 计算攻击防御值
             player.attack = Mathf.FloorToInt(config.balanceMultiplier * originalYang);
             player.defense = Mathf.FloorToInt(config.balanceMultiplier * originalYin);
 
-            // Handle healing (every 2 turns)
+            // 处理恢复效果
             if (balanceHealCooldown == 0)
             {
                 player.health = Mathf.Min(player.health + 5, player.maxHealth);
-                BattleEventSystem.OnBattleLog.Invoke("Balance healed 5 HP!");
+                BattleEventSystem.OnBattleLog.Invoke("Balance state healed 5 HP!");
                 balanceHealCooldown = 2;
             }
             else
             {
                 balanceHealCooldown--;
-                BattleEventSystem.OnBattleLog.Invoke($"Balance heal cooldown: {balanceHealCooldown} turns left");
+                BattleEventSystem.OnBattleLog.Invoke($"Balance state heal on cooldown. {balanceHealCooldown} turns left");
             }
             return;
         }
 
-        // Default state
+        // 默认状态
         currentStateName = "Default";
         player.attack = originalYang;
         player.defense = originalYin;
