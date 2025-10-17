@@ -23,8 +23,8 @@ public class PlayerData : MonoBehaviour
     [Header("Effects")]
     public bool counterStrikeActive;
     public float counterStrikeMultiplier = 1.0f;
-    public bool nextTurnAttackDebuff; // 下回合攻击下降
-    public bool nextTurnDefenseDebuff; // 下回合防御下降
+    public bool nextTurnAttackDebuff;
+    public bool nextTurnDefenseDebuff;
     public List<DotEffect> activeDots = new List<DotEffect>();
 
     [System.Serializable]
@@ -59,8 +59,6 @@ public class PlayerData : MonoBehaviour
         counterStrikeActive = false;
         counterStrikeMultiplier = 1.0f;
         qiPoints = config.playerBaseQiPoints;
-        nextTurnAttackDebuff = false;
-        nextTurnDefenseDebuff = false;
     }
 
     public void ActivateCounterStrike(float multiplier = 1.0f)

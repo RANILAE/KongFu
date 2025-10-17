@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 public class EnemyData : MonoBehaviour
@@ -6,22 +5,16 @@ public class EnemyData : MonoBehaviour
     [Header("Core Attributes")]
     public int health;
     public int maxHealth;
+
+    [Header("Battle Attributes")]
     public int baseAttack;
     public int currentAttack;
-    public int defense; // ĞÂÔö·ÀÓùÊôĞÔ
-    public int turnCount;
+    public int defense; // Added defense attribute
+    public int turnCount = 0;
 
-    [Header("Effects")]
-    public int yangPenetrationStacks; // Ñô´©Í¸µş²ã
-    public int yinCoverStacks;        // Òõ¸²¸Çµş²ã
-    public List<DotEffect> activeDots = new List<DotEffect>();
-
-    [System.Serializable]
-    public struct DotEffect
-    {
-        public int damage;
-        public int duration;
-    }
+    [Header("Buff Stacks")]
+    public int yangPenetrateStacks;
+    public int yinCoverStacks;
 
     public void ResetEnemy(BattleConfig config)
     {
@@ -29,25 +22,19 @@ public class EnemyData : MonoBehaviour
         health = maxHealth;
         baseAttack = config.enemyBaseAttack;
         currentAttack = baseAttack;
-        defense = 0; // ³õÊ¼»¯·ÀÓùÖµÎª0
+        defense = 0; // Initialize defense
         turnCount = 0;
-        yangPenetrationStacks = 0;
+        yangPenetrateStacks = 0;
         yinCoverStacks = 0;
-        activeDots.Clear();
     }
 
-    public void AddYangPenetrationStack()
+    public void ApplyYangPenetrate(int amount = 1)
     {
-        yangPenetrationStacks++;
+        yangPenetrateStacks += amount;
     }
 
-    public void AddYinCoverStack()
+    public void ApplyYinCover(int amount = 1)
     {
-        yinCoverStacks++;
-    }
-
-    public void ResetYinCoverStacks()
-    {
-        yinCoverStacks = 0;
+        yinCoverStacks += amount;
     }
 }
