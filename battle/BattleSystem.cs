@@ -1,52 +1,46 @@
 using UnityEngine;
-using UnityEngine.Events;
-using System.Text;
-using System.Collections.Generic;
-using TMPro;
+using System.Collections;
 
 public class BattleSystem : MonoBehaviour
 {
+    // 单例模式，确保跨关卡不销毁
     public static BattleSystem Instance { get; private set; }
 
-    [Header("Battle Entities")]
-    public PlayerData player;
-    public EnemyData enemy;
+    [Header("Core Systems")]
+    public PlayerManager playerManager; // 玩家管理器，保持引用
+    public EnemyManager enemyManager;
     public YinYangSystem yinYangSystem;
+    public UIManager uiManager;
+    public EffectManager effectManager;
+    public WheelSystem wheelSystem;
+    public WheelController wheelController;
     public IconManager iconManager;
+    public RetainedPointsSystem retainedPointsSystem;
+    public AudioManager audioManager;
+    public AnimationManager animationManager;
+    public CounterStrikeSystem counterStrikeSystem;
 
     [Header("Battle Config")]
     public BattleConfig config;
 
-    [Header("Battle Log")]
-    public TMP_Text battleLogText;
-
     [Header("Battle State")]
     public BattleState currentState;
-    public enum BattleState { PlayerTurn, EnemyTurn, BattleEnd }
+    public enum BattleState { PlayerSetup, PlayerTurn, EnemyTurn, BattleEnd }
 
-    [Header("Event Callbacks")]
-    public UnityEvent onPlayerTurnStart;
-    public UnityEvent onEnemyTurnStart;
-    public UnityEvent onBattleEnd;
-    public UnityEvent onDamageCalculated;
-    public UnityEvent<string> onBattleLog;
-
-    private List<string> battleLog = new List<string>();
-    private const int MAX_LOG_LINES = 10;
-    private int damageTakenCount = 0;
-    private float playerDamageFactor = 1.0f;
     private int currentRound = 1;
-    private string lastLog = "";
-    private int balanceHealCooldown = 0; // 平衡状态恢复冷却
+    private bool isBattleInitialized = false;
 
     void Awake()
     {
         if (Instance == null)
         {
             Instance = this;
+            // 确保这个游戏对象在加载新场景时不会被销毁
+            DontDestroyOnLoad(gameObject);
         }
         else
         {
+            // 如果已经存在一个实例，则销毁当前这个
             Destroy(gameObject);
         }
     }
@@ -55,585 +49,636 @@ public class BattleSystem : MonoBehaviour
     {
         if (config == null)
         {
-            Debug.LogError("BattleConfig not assigned in BattleSystem!");
+            Debug.LogError("BattleConfig not assigned! Please assign a BattleConfig asset.");
             return;
         }
 
-        StartBattle();
+        // 在Start中调用初始化，确保所有依赖项都已加载
+        InitializeBattle();
     }
 
-    public void StartBattle()
+    public void InitializeBattle()
     {
-        player.ResetPlayer(config);
-        enemy.ResetEnemy(config);
-        damageTakenCount = 0;
-        playerDamageFactor = 1.0f;
-        currentRound = 1;
-        balanceHealCooldown = 0;
+        if (isBattleInitialized) return;
 
-        // 清除所有效果
-        if (iconManager != null) iconManager.ClearAllEffects();
+        Debug.Log("Initializing battle");
 
-        battleLog.Clear();
-        AddLog("=== BATTLE STARTED ===");
-        AddLog($"Round {currentRound}");
-        StartPlayerTurn();
-    }
+        // 确保所有核心组件都已初始化
+        if (playerManager == null) playerManager = FindObjectOfType<PlayerManager>();
+        if (enemyManager == null) enemyManager = FindObjectOfType<EnemyManager>();
+        if (yinYangSystem == null) yinYangSystem = FindObjectOfType<YinYangSystem>();
+        if (uiManager == null) uiManager = FindObjectOfType<UIManager>();
+        if (effectManager == null) effectManager = FindObjectOfType<EffectManager>();
+        if (wheelSystem == null) wheelSystem = FindObjectOfType<WheelSystem>();
+        if (wheelController == null) wheelController = FindObjectOfType<WheelController>();
+        if (iconManager == null) iconManager = FindObjectOfType<IconManager>();
+        if (retainedPointsSystem == null) retainedPointsSystem = FindObjectOfType<RetainedPointsSystem>();
+        if (audioManager == null) audioManager = FindObjectOfType<AudioManager>();
+        if (animationManager == null) animationManager = FindObjectOfType<AnimationManager>();
+        if (counterStrikeSystem == null) counterStrikeSystem = FindObjectOfType<CounterStrikeSystem>();
 
-    public void AddLog(string message)
-    {
-        // 避免重复日志
-        if (battleLog.Count > 0 && battleLog[battleLog.Count - 1] == message)
+        // 初始化所有系统
+        if (playerManager != null) playerManager.Initialize(config, iconManager);
+        if (enemyManager != null) enemyManager.Initialize(config);
+        if (effectManager != null) effectManager.Initialize(iconManager);
+        if (yinYangSystem != null) yinYangSystem.Initialize(config);
+        if (uiManager != null) uiManager.Initialize();
+        if (wheelSystem != null) wheelSystem.Initialize(config.maxPoints);
+        if (wheelController != null) wheelController.Initialize(config.maxPoints);
+        if (retainedPointsSystem != null) retainedPointsSystem.Initialize(playerManager, wheelSystem);
+        if (audioManager != null) audioManager.Initialize();
+        if (animationManager != null) animationManager.Initialize();
+
+        // 初始化CounterStrikeSystem
+        if (counterStrikeSystem != null)
         {
+            counterStrikeSystem.Initialize(playerManager, enemyManager, effectManager, iconManager);
+        }
+
+        if (uiManager != null && playerManager != null && enemyManager != null)
+        {
+            uiManager.UpdateRoundDisplay(currentRound);
+            uiManager.UpdatePlayerStatus(playerManager.Health, playerManager.MaxHealth, playerManager.Attack, playerManager.Defense);
+            uiManager.UpdateEnemyStatus(enemyManager.Health, enemyManager.MaxHealth);
+        }
+
+        // 播放背景音乐
+        if (config.backgroundMusic != null && audioManager != null)
+        {
+            audioManager.PlayBackgroundMusic(config.backgroundMusic);
+        }
+
+        StartPlayerSetup();
+        isBattleInitialized = true;
+    }
+
+    public void StartPlayerSetup()
+    {
+        currentState = BattleState.PlayerSetup;
+        Debug.Log("Player Setup Phase");
+
+        // 重置轮盘保留点数（每回合开始时）
+        if (wheelSystem != null)
+        {
+            wheelSystem.ResetRetainedPoints();
+        }
+
+        // 应用保留点数（在回合开始时应用上一回合计算的保留点数）
+        if (retainedPointsSystem != null)
+        {
+            retainedPointsSystem.ApplyRetainedPointsToWheel();
+        }
+
+        // 重置玩家攻击防御属性
+        if (playerManager != null)
+        {
+            playerManager.ResetForNewTurn();
+        }
+
+        // 显示轮盘和UI
+        if (wheelSystem != null)
+        {
+            wheelSystem.ShowWheelUI();
+            wheelSystem.ResetPoints();
+        }
+
+        if (wheelController != null)
+        {
+            wheelController.ResetSliders();
+            // 更新滑块最大值以反映当前的保留点数
+            wheelController.UpdateSliderMaxValues();
+        }
+
+        // 显示敌人意图
+        if (enemyManager != null && effectManager != null && playerManager != null)
+        {
+            EnemyManager.EnemyAction nextAction = enemyManager.ChooseAction(currentRound, playerManager.DamageTakenLastTurn);
+            effectManager.ShowEnemyIntent(nextAction);
+        }
+
+        if (uiManager != null)
+        {
+            uiManager.UpdateBattleLog("Choose your Yin-Yang points for the round.");
+            uiManager.ShowYinYangSetup();
+            // 显示玩家回合提示（使用配置中的持续时间）
+            uiManager.ShowTurnIndicator("Player Turn", config.turnIndicatorDuration);
+        }
+    }
+
+    private IEnumerator StartEnemyTurnAfterDelay(float delay)
+    {
+        Debug.Log($"Starting enemy turn after {delay} seconds delay");
+        yield return new WaitForSeconds(delay);
+        StartCoroutine(StartEnemyTurn());
+    }
+
+    public IEnumerator StartEnemyTurn()
+    {
+        Debug.Log("===== ENEMY TURN STARTED =====");
+        currentState = BattleState.EnemyTurn;
+        Debug.Log("Enemy Turn");
+
+        // 显示敌人回合提示（使用配置中的持续时间）
+        if (uiManager != null)
+        {
+            uiManager.ShowTurnIndicator("Enemy Turn", config.turnIndicatorDuration);
+        }
+
+        // 等待提示显示完毕后再开始敌人行动
+        yield return new WaitForSeconds(config.turnIndicatorDuration);
+
+        // 处理DOT和Debuff效果
+        if (effectManager != null)
+        {
+            Debug.Log("Processing all effects");
+            effectManager.ProcessAllEffects();
+        }
+
+        // 检查玩家是否死亡
+        if (playerManager != null && playerManager.Health <= 0)
+        {
+            Debug.Log("Player died during effect processing");
+            EndBattle(false);
+            yield break;
+        }
+
+        // 敌人回合逻辑
+        if (enemyManager != null && playerManager != null)
+        {
+            Debug.Log("Enemy choosing action");
+            EnemyManager.EnemyAction action = enemyManager.ChooseAction(currentRound, playerManager.DamageTakenLastTurn);
+
+            switch (action.type)
+            {
+                case EnemyManager.EnemyAction.Type.Attack:
+                    Debug.Log("Enemy chose to attack");
+                    yield return StartCoroutine(HandleEnemyAttackSequence());
+                    break;
+                case EnemyManager.EnemyAction.Type.Defend:
+                    Debug.Log("Enemy chose to defend");
+                    yield return StartCoroutine(HandleEnemyDefendSequence());
+                    break;
+                case EnemyManager.EnemyAction.Type.Charge:
+                    Debug.Log("Enemy chose to charge");
+                    yield return StartCoroutine(HandleEnemyChargeSequence());
+                    break;
+            }
+        }
+
+        // 处理反震
+        if (counterStrikeSystem != null)
+        {
+            Debug.Log("Handling counter strike");
+            counterStrikeSystem.HandleCounterStrike();
+        }
+
+        if (animationManager != null)
+        {
+            Debug.Log("Playing counter strike effect");
+            animationManager.PlayCounterStrikeEffect();
+        }
+
+        if (playerManager != null && playerManager.Health <= 0)
+        {
+            Debug.Log("Player died after enemy actions");
+            EndBattle(false);
+            yield break;
+        }
+
+        currentRound++;
+        Debug.Log($"Round incremented to {currentRound}");
+
+        if (uiManager != null)
+        {
+            uiManager.UpdateRoundDisplay(currentRound);
+        }
+
+        Debug.Log("Starting player setup after delay");
+        StartCoroutine(StartPlayerSetupAfterDelay(1.5f));
+    }
+
+    private IEnumerator StartPlayerSetupAfterDelay(float delay)
+    {
+        Debug.Log($"Starting player setup after {delay} seconds delay");
+        yield return new WaitForSeconds(delay);
+
+        // 敌人回合结束后，显示玩家回合提示（使用配置中的持续时间）
+        if (uiManager != null)
+        {
+            uiManager.ShowTurnIndicator("Player Turn", config.turnIndicatorDuration);
+        }
+
+        yield return new WaitForSeconds(config.turnIndicatorDuration); // 等待提示显示完毕
+
+        StartPlayerSetup();
+    }
+
+    private void EndBattle(bool playerWins)
+    {
+        Debug.Log($"Battle ended. Player wins: {playerWins}");
+        currentState = BattleState.BattleEnd;
+
+        // 调用新方法来显示结束面板
+        if (uiManager != null)
+        {
+            if (playerWins)
+            {
+                uiManager.ShowWinPanel();
+            }
+            else
+            {
+                uiManager.ShowLosePanel();
+            }
+        }
+
+        // 播放结束音效
+        if (audioManager != null)
+        {
+            audioManager.StopBackgroundMusic();
+
+            if (playerWins && config.victorySound != null)
+            {
+                Debug.Log("Playing victory sound");
+                audioManager.PlaySoundEffect(config.victorySound);
+            }
+            else if (!playerWins && config.defeatSound != null)
+            {
+                Debug.Log("Playing defeat sound");
+                audioManager.PlaySoundEffect(config.defeatSound);
+            }
+        }
+
+        // 重置轮盘
+        if (wheelSystem != null)
+        {
+            wheelSystem.ResetRetainedPoints();
+            wheelSystem.ResetBaseMaxPoints(); // 战斗结束时重置基础点数
+        }
+    }
+
+    // 修改：添加叠层检查逻辑
+    public void OnEndButtonClick()
+    {
+        Debug.Log("End button clicked");
+
+        if (currentState != BattleState.PlayerSetup)
+        {
+            Debug.LogWarning("End button clicked but not in PlayerSetup state");
             return;
         }
 
-        battleLog.Add(message);
-
-        while (battleLog.Count > MAX_LOG_LINES)
+        if (wheelSystem == null)
         {
-            battleLog.RemoveAt(0);
+            Debug.LogError("WheelSystem is null");
+            return;
         }
 
-        StringBuilder formattedLog = new StringBuilder();
-        foreach (string line in battleLog)
+        float yangPoints = wheelSystem.CurrentYangPoints;
+        float yinPoints = wheelSystem.CurrentYinPoints;
+        Debug.Log($"Yang points: {yangPoints}, Yin points: {yinPoints}");
+
+        // 检查是否尝试使用极端技能但叠层不足
+        float diff = yangPoints - yinPoints;
+        float absDiff = Mathf.Abs(diff);
+
+        // 检查极端阳状态（5-7点差值）
+        if (diff >= 5f && diff <= 7f)
         {
-            formattedLog.AppendLine(line);
+            // 极端阳需要至少3层阳穿透叠层
+            int yangStacks = effectManager.GetYangPenetrationStacks();
+            if (yangStacks < 3)
+            {
+                // 显示叠层不足提示
+                if (uiManager != null)
+                {
+                    uiManager.ShowStackInsufficientPanel("Insufficient Yang Penetration stacks!\nNeed at least 3 stacks to use Extreme Yang.");
+                    uiManager.UpdateBattleLog("Cannot use Extreme Yang: Insufficient Yang Penetration stacks (need 3)!");
+                }
+                return; // 不继续执行
+            }
+        }
+        // 检查极端阴状态（-5到-7点差值）
+        else if (diff <= -5f && diff >= -7f)
+        {
+            // 极端阴需要至少3层阴覆盖叠层
+            int yinStacks = effectManager.GetYinCoverStacks();
+            if (yinStacks < 3)
+            {
+                // 显示叠层不足提示
+                if (uiManager != null)
+                {
+                    uiManager.ShowStackInsufficientPanel("Insufficient Yin Cover stacks!\nNeed at least 3 stacks to use Extreme Yin.");
+                    uiManager.UpdateBattleLog("Cannot use Extreme Yin: Insufficient Yin Cover stacks (need 3)!");
+                }
+                return; // 不继续执行
+            }
         }
 
-        onBattleLog?.Invoke(formattedLog.ToString());
-        lastLog = message;
-    }
-
-    void StartPlayerTurn()
-    {
-        // 重置玩家状态
-        player.ResetForNewTurn(config);
-
-        // 清除上回合的下降效果
-        if (iconManager != null)
+        if (wheelSystem != null)
         {
-            iconManager.RemovePlayerEffect(IconManager.EffectCategory.AttackDebuff);
-            iconManager.RemovePlayerEffect(IconManager.EffectCategory.DefenseDebuff);
+            wheelSystem.HideWheelUI();
         }
-
-        // 重置反震效果
-        player.counterStrikeActive = false;
-        iconManager.RemovePlayerEffect(IconManager.EffectCategory.CounterStrike);
-
-        // 更新阴阳系统冷却
-        yinYangSystem.UpdateBalanceCooldown();
 
         currentState = BattleState.PlayerTurn;
-        onPlayerTurnStart?.Invoke();
-        AddLog("Player turn started");
+        Debug.Log("State changed to PlayerTurn");
 
-        // 添加当前叠层信息
-        AddLog($"Current Stacks: Yang Critical: {player.yangCriticalCounter}, Yin Critical: {player.yinCriticalCounter}, Extreme Yang: {player.extremeYangStack}/3, Extreme Yin: {player.extremeYinStack}/3");
+        // 应用阴阳点数效果
+        if (yinYangSystem != null)
+        {
+            Debug.Log("Applying yin-yang effects");
+            yinYangSystem.ApplyEffects(yangPoints, yinPoints);
+        }
 
-        // 更新叠层显示
-        UpdatePlayerStacksDisplay();
+        // 更新UI
+        if (uiManager != null && playerManager != null)
+        {
+            uiManager.UpdatePlayerAttackDefense(playerManager.Attack, playerManager.Defense);
+        }
+
+        // 计算当前回合的保留点数（在玩家回合结束时）
+        if (retainedPointsSystem != null)
+        {
+            Debug.Log("Calculating current retained points");
+            retainedPointsSystem.CalculateCurrentRetainedPoints();
+        }
+
+        // 启动玩家攻击序列协程
+        StartCoroutine(HandlePlayerAttackSequence());
+
+        // 延迟开始敌人回合
+        Debug.Log("Starting enemy turn after delay");
+        StartCoroutine(StartEnemyTurnAfterDelay(1.5f));
     }
 
-    // 更新玩家叠层显示
-    void UpdatePlayerStacksDisplay()
+    private IEnumerator HandlePlayerAttackSequence()
     {
-        if (iconManager == null) return;
-
-        // 更新阳叠层（只在有叠层时显示）
-        if (player.yangCriticalCounter > 0)
+        // 1. 播放玩家攻击动画
+        if (animationManager != null)
         {
-            iconManager.AddPlayerEffect(
-                IconManager.EffectCategory.YangStack,
-                player.yangCriticalCounter
-            );
-        }
-
-        // 更新阴叠层（只在有叠层时显示）
-        if (player.yinCriticalCounter > 0)
-        {
-            iconManager.AddPlayerEffect(
-                IconManager.EffectCategory.YinStack,
-                player.yinCriticalCounter
-            );
-        }
-
-        // 显示攻击下降效果
-        if (player.nextTurnAttackDebuff)
-        {
-            iconManager.AddPlayerEffect(IconManager.EffectCategory.AttackDebuff);
-        }
-
-        // 显示防御下降效果
-        if (player.nextTurnDefenseDebuff)
-        {
-            iconManager.AddPlayerEffect(IconManager.EffectCategory.DefenseDebuff);
-        }
-    }
-
-    public void EndPlayerTurn()
-    {
-        if (currentState != BattleState.PlayerTurn) return;
-
-        // 保存原始点数用于DOT计算
-        int originalAttack = player.attack;
-        int originalDefense = player.defense;
-
-        // 应用阴阳效果
-        ApplyYinYangEffects(originalAttack, originalDefense);
-
-        // 计算玩家伤害
-        int baseDamage = player.attack - enemy.defense;
-        int calculatedDamage = Mathf.FloorToInt(baseDamage * playerDamageFactor);
-
-        if (calculatedDamage > 0)
-        {
-            enemy.health = Mathf.Max(0, enemy.health - calculatedDamage);
-            AddLog($"Player dealt {calculatedDamage} damage");
-            damageTakenCount++;
-        }
-        else
-        {
-            AddLog("Player attack dealt no damage");
-        }
-
-        onDamageCalculated?.Invoke();
-
-        if (enemy.health <= 0)
-        {
-            EndBattle(true);
-            return;
-        }
-
-        StartEnemyTurn();
-    }
-
-    // 应用阴阳效果（根据图片机制）
-    void ApplyYinYangEffects(int originalAttack, int originalDefense)
-    {
-        int yangPoints = originalAttack;
-        int yinPoints = originalDefense;
-        int diff = yangPoints - yinPoints; // 阳点数 - 阴点数
-
-        // 1. 极端阳状态 (阳-阴 ≥ 5)
-        if (diff >= 5)
-        {
-            // 检查极端阳叠层是否满足
-            if (player.extremeYangStack >= 3)
+            Debug.Log("Playing player attack animation");
+            animationManager.PlayPlayerAttack();
+            // 等待动画完成
+            while (animationManager.IsPlayerAnimating())
             {
-                AddLog("Extreme Yang activated!");
-
-                // 计算攻击防御值
-                player.attack = Mathf.FloorToInt(config.extremeYangAttackMultiplier * yangPoints);
-                player.defense = Mathf.FloorToInt(config.extremeYangDefenseMultiplier * yinPoints);
-
-                // 重置叠层
-                player.ResetExtremeYangStack();
-
-                // 设置下回合攻击下降
-                player.nextTurnAttackDebuff = true;
-
-                // 引爆阳穿透效果
-                if (enemy.yangPenetrationStacks > 0)
-                {
-                    int yangDamage = enemy.yangPenetrationStacks * yangPoints;
-                    enemy.health = Mathf.Max(0, enemy.health - yangDamage);
-                    enemy.yangPenetrationStacks = 0;
-                    iconManager.RemoveEnemyEffect(IconManager.EffectCategory.YangPenetration);
-                    AddLog($"Extreme Yang detonation! Dealt {yangDamage} damage to enemy");
-                }
-            }
-            else
-            {
-                // 叠层不足无法激活
-                AddLog($"Extreme Yang locked! Requires 3 critical yang stacks (current: {player.extremeYangStack}/3)");
-                player.attack = yangPoints;
-                player.defense = yinPoints;
-            }
-            return;
-        }
-
-        // 2. 极端阴状态 (阴-阳 ≥ 5)
-        if (diff <= -5)
-        {
-            // 检查极端阴叠层是否满足
-            if (player.extremeYinStack >= 3)
-            {
-                AddLog("Extreme Yin activated!");
-
-                // 计算攻击防御值
-                player.attack = yangPoints;
-                player.defense = Mathf.FloorToInt(config.extremeYinDefenseMultiplier * yinPoints);
-
-                // 重置叠层
-                player.ResetExtremeYinStack();
-
-                // 设置下回合防御下降
-                player.nextTurnDefenseDebuff = true;
-
-                // 激活反震效果
-                player.ActivateCounterStrike(1.5f);
-                iconManager.AddPlayerEffect(IconManager.EffectCategory.CounterStrike);
-                AddLog("Counter Strike effect activated! (1.5x multiplier)");
-
-                // 引爆阴覆盖效果
-                if (enemy.yinCoverStacks > 0)
-                {
-                    int defenseReduce = enemy.yinCoverStacks * 2;
-                    enemy.defense = Mathf.Max(0, enemy.defense - defenseReduce);
-                    enemy.ResetYinCoverStacks();
-                    iconManager.RemoveEnemyEffect(IconManager.EffectCategory.YinCover);
-                    AddLog($"Extreme Yin detonation! Reduced enemy defense by {defenseReduce}");
-                }
-            }
-            else
-            {
-                // 叠层不足无法激活
-                AddLog($"Extreme Yin locked! Requires 3 critical yin stacks (current: {player.extremeYinStack}/3)");
-                player.attack = yangPoints;
-                player.defense = yinPoints;
-            }
-            return;
-        }
-
-        // 3. 阳盛状态 (4 >= 阳-阴 > 2)
-        if (diff > 2 && diff <= 4)
-        {
-            AddLog("Yang Sheng activated!");
-
-            // 计算攻击防御值
-            player.attack = Mathf.FloorToInt(config.yangShengAttackMultiplier * yangPoints);
-            player.defense = Mathf.FloorToInt(config.yangShengDefenseMultiplier * yinPoints);
-
-            // 添加敌人DOT效果
-            int dotDamage = Mathf.FloorToInt(yangPoints / 2);
-            AddEnemyDotEffect(dotDamage, 2);
-            return;
-        }
-
-        // 4. 阴盛状态 (4 >= 阴-阳 > 2)
-        if (diff < -2 && diff >= -4)
-        {
-            AddLog("Yin Sheng activated!");
-
-            // 计算攻击防御值
-            player.attack = yangPoints;
-            player.defense = Mathf.FloorToInt(config.yinShengDefenseMultiplier * yinPoints);
-
-            // 激活反震效果
-            player.ActivateCounterStrike(1.0f);
-            iconManager.AddPlayerEffect(IconManager.EffectCategory.CounterStrike);
-            AddLog("Counter Strike effect activated! (1.0x multiplier)");
-            return;
-        }
-
-        // 5. 临界阳状态 (阳-阴 = 2)
-        if (diff == 2)
-        {
-            AddLog("Critical Yang activated!");
-
-            // 计算攻击防御值
-            player.attack = Mathf.FloorToInt(config.criticalYangAttackMultiplier * yangPoints);
-            player.defense = Mathf.FloorToInt(config.criticalYangDefenseMultiplier * yinPoints);
-
-            // 增加临界阳计数器和极端阳叠层
-            player.IncrementYangCriticalCounter();
-
-            // 给敌人添加阳穿透效果
-            enemy.AddYangPenetrationStack();
-            iconManager.AddEnemyEffect(
-                IconManager.EffectCategory.YangPenetration,
-                enemy.yangPenetrationStacks
-            );
-            AddLog($"Applied Yang Penetration stack to enemy (current: {enemy.yangPenetrationStacks})");
-            return;
-        }
-
-        // 6. 临界阴状态 (阴-阳 = 2)
-        if (diff == -2)
-        {
-            AddLog("Critical Yin activated!");
-
-            // 计算攻击防御值
-            player.attack = Mathf.FloorToInt(config.criticalYinAttackMultiplier * yangPoints);
-            player.defense = Mathf.FloorToInt(config.criticalYinDefenseMultiplier * yinPoints);
-
-            // 增加临界阴计数器和极端阴叠层
-            player.IncrementYinCriticalCounter();
-
-            // 给敌人添加阴覆盖效果
-            enemy.AddYinCoverStack();
-            iconManager.AddEnemyEffect(
-                IconManager.EffectCategory.YinCover,
-                enemy.yinCoverStacks
-            );
-            AddLog($"Applied Yin Cover stack to enemy (current: {enemy.yinCoverStacks})");
-
-            // 激活反震效果
-            player.ActivateCounterStrike(1.0f);
-            iconManager.AddPlayerEffect(IconManager.EffectCategory.CounterStrike);
-            AddLog("Counter Strike effect activated! (1.0x multiplier)");
-            return;
-        }
-
-        // 7. 平衡状态 (阳-阴的绝对值 < 1)
-        if (Mathf.Abs(diff) < 1)
-        {
-            AddLog("Balance state activated!");
-
-            // 计算攻击防御值
-            player.attack = Mathf.FloorToInt(config.balanceMultiplier * yangPoints);
-            player.defense = Mathf.FloorToInt(config.balanceMultiplier * yinPoints);
-
-            // 处理恢复效果
-            if (balanceHealCooldown == 0)
-            {
-                player.health = Mathf.Min(player.health + 5, player.maxHealth);
-                AddLog("Balance state healed 5 HP!");
-                balanceHealCooldown = 2;
-            }
-            else
-            {
-                balanceHealCooldown--;
-                AddLog($"Balance state heal on cooldown. {balanceHealCooldown} turns left");
-            }
-            return;
-        }
-
-        // 默认状态
-        AddLog("No special effect from Yin-Yang energies");
-        player.attack = yangPoints;
-        player.defense = yinPoints;
-    }
-
-    void StartEnemyTurn()
-    {
-        currentState = BattleState.EnemyTurn;
-        onEnemyTurnStart?.Invoke();
-        AddLog("Enemy turn started");
-
-        enemy.turnCount++;
-        ChooseEnemyAction();
-    }
-
-    void ChooseEnemyAction()
-    {
-        if (enemy.turnCount % 3 == 0)
-        {
-            EnemyCharge();
-        }
-        else if (damageTakenCount % 2 == 1)
-        {
-            EnemyDefense();
-        }
-        else
-        {
-            EnemyAttack();
-        }
-
-        ProcessPlayerDots();
-        ProcessEnemyDots();
-
-        onDamageCalculated?.Invoke();
-
-        if (player.health <= 0)
-        {
-            EndBattle(false);
-            return;
-        }
-
-        // 增加回合计数
-        currentRound++;
-        AddLog($"Round {currentRound}");
-
-        // 开始下一回合的玩家回合
-        StartPlayerTurn();
-    }
-
-    void EnemyCharge()
-    {
-        enemy.baseAttack += 3;
-        enemy.currentAttack = enemy.baseAttack;
-        AddLog($"Enemy used Power Charge! ATK permanently increased to {enemy.currentAttack}");
-
-        // 敌人回合结束，移除反震图标
-        iconManager.RemovePlayerEffect(IconManager.EffectCategory.CounterStrike);
-    }
-
-    void EnemyDefense()
-    {
-        playerDamageFactor = 0.8f;
-        AddLog("Enemy entered Defense Stance! Player damage reduced by 20%");
-
-        // 敌人回合结束，移除反震图标
-        iconManager.RemovePlayerEffect(IconManager.EffectCategory.CounterStrike);
-    }
-
-    void EnemyAttack()
-    {
-        int damage = enemy.currentAttack;
-        int actualDamage = Mathf.Max(0, damage - player.defense);
-
-        if (actualDamage > 0)
-        {
-            player.health = Mathf.Max(0, player.health - actualDamage);
-            AddLog($"Enemy dealt {actualDamage} damage");
-
-            // 如果反震激活
-            if (player.counterStrikeActive)
-            {
-                // 敌人攻击 < 玩家防御：反震成功
-                if (damage < player.defense)
-                {
-                    int counterDamage = Mathf.FloorToInt(player.defense * player.counterStrikeMultiplier);
-                    enemy.health = Mathf.Max(0, enemy.health - counterDamage);
-                    AddLog($"Counter Strike! Enemy took {counterDamage} damage");
-                }
-                // 敌人攻击 > 玩家防御：反震失败，添加玩家DOT
-                else
-                {
-                    int dotDamage = Mathf.FloorToInt(damage * 0.5f);
-                    AddPlayerDotEffect(dotDamage, 2);
-                    AddLog("Counter Strike failed! Player receives DOT damage");
-                }
+                yield return null;
             }
         }
-        else
+
+        // 2. 播放攻击音效
+        yield return new WaitForSeconds(config.playerAttackSoundDelay);
+        if (config.playerAttackSound != null && audioManager != null)
         {
-            AddLog($"Enemy attack failed (Player DEF: {player.defense})");
+            Debug.Log("Playing player attack sound");
+            audioManager.PlaySoundEffect(config.playerAttackSound);
         }
 
-        // 敌人回合结束，移除反震图标
-        iconManager.RemovePlayerEffect(IconManager.EffectCategory.CounterStrike);
-    }
-
-    // 添加玩家DOT效果
-    void AddPlayerDotEffect(int damage, int duration)
-    {
-        player.activeDots.Add(new PlayerData.DotEffect
+        // 3. 计算并应用玩家伤害
+        if (playerManager != null && enemyManager != null)
         {
-            damage = damage,
-            duration = duration
-        });
+            float damage = playerManager.CalculateDamage(enemyManager.CurrentDefense);
+            Debug.Log($"Player calculated damage: {damage}");
 
-        // 显示玩家DOT图标
-        iconManager.AddPlayerEffect(
-            IconManager.EffectCategory.PlayerDot,
-            0, // 叠层数
-            duration
-        );
+            // 敌人受到伤害
+            if (enemyManager != null)
+            {
+                Debug.Log("Enemy taking damage");
+                enemyManager.TakeDamage(damage);
+            }
 
-        AddLog($"Player received DOT effect: {damage} damage per turn for {duration} turns");
-    }
+            // 更新敌人状态UI
+            if (uiManager != null)
+            {
+                uiManager.UpdateEnemyStatus(enemyManager.Health, enemyManager.MaxHealth);
+            }
 
-    // 添加敌人DOT效果
-    void AddEnemyDotEffect(int damage, int duration)
-    {
-        enemy.activeDots.Add(new EnemyData.DotEffect
-        {
-            damage = damage,
-            duration = duration
-        });
-
-        // 显示敌人DOT图标
-        iconManager.AddEnemyEffect(
-            IconManager.EffectCategory.EnemyDot,
-            0, // 叠层数
-            duration
-        );
-
-        AddLog($"Enemy received DOT effect: {damage} damage per turn for {duration} turns");
-    }
-
-    void ProcessPlayerDots()
-    {
-        for (int i = player.activeDots.Count - 1; i >= 0; i--)
-        {
-            var dot = player.activeDots[i];
-            player.health -= dot.damage;
-            dot.duration--;
-
-            AddLog($"Player took {dot.damage} DOT damage");
-
-            if (dot.duration <= 0) player.activeDots.RemoveAt(i);
-            else player.activeDots[i] = dot;
-
-            // 更新玩家DOT效果显示
-            UpdatePlayerDotEffectDisplay(dot, i);
+            // 检查敌人是否死亡
+            if (enemyManager.Health <= 0)
+            {
+                Debug.Log("Enemy died. Player wins!");
+                EndBattle(true);
+                yield break;
+            }
         }
 
-        player.health = Mathf.Max(0, player.health);
-    }
-
-    void ProcessEnemyDots()
-    {
-        for (int i = enemy.activeDots.Count - 1; i >= 0; i--)
+        // 4. 播放敌人受击动画
+        yield return new WaitForSeconds(config.enemyHitSoundDelay);
+        if (animationManager != null)
         {
-            var dot = enemy.activeDots[i];
-            enemy.health -= dot.damage;
-            dot.duration--;
-
-            AddLog($"Enemy took {dot.damage} DOT damage");
-
-            if (dot.duration <= 0) enemy.activeDots.RemoveAt(i);
-            else enemy.activeDots[i] = dot;
-
-            // 更新敌人DOT效果显示
-            UpdateEnemyDotEffectDisplay(dot, i);
+            Debug.Log("Playing enemy hit animation");
+            animationManager.PlayEnemyHit();
+            // 等待动画完成
+            while (animationManager.IsEnemyAnimating())
+            {
+                yield return null;
+            }
         }
 
-        enemy.health = Mathf.Max(0, enemy.health);
-    }
-
-    // 更新玩家DOT效果显示
-    void UpdatePlayerDotEffectDisplay(PlayerData.DotEffect dot, int index)
-    {
-        if (iconManager == null) return;
-
-        if (dot.duration <= 0)
+        // 5. 播放敌人受击音效
+        if (config.enemyHitSound != null && audioManager != null)
         {
-            // 移除过期的DOT效果
-            iconManager.RemovePlayerEffect(IconManager.EffectCategory.PlayerDot);
-        }
-        else
-        {
-            // 更新DOT效果
-            iconManager.UpdatePlayerEffect(
-                IconManager.EffectCategory.PlayerDot,
-                0, // 叠层数
-                dot.duration
-            );
+            Debug.Log("Playing enemy hit sound");
+            audioManager.PlaySoundEffect(config.enemyHitSound);
         }
     }
 
-    // 更新敌人DOT效果显示
-    void UpdateEnemyDotEffectDisplay(EnemyData.DotEffect dot, int index)
+    private IEnumerator HandleEnemyAttackSequence()
     {
-        if (iconManager == null) return;
-
-        if (dot.duration <= 0)
+        // 1. 播放敌人攻击动画
+        if (animationManager != null)
         {
-            // 移除过期的DOT效果
-            iconManager.RemoveEnemyEffect(IconManager.EffectCategory.EnemyDot);
+            Debug.Log("Playing enemy attack animation");
+            animationManager.PlayEnemyAttack();
+            // 等待动画完成
+            while (animationManager.IsEnemyAnimating())
+            {
+                yield return null;
+            }
         }
-        else
+
+        // 2. 播放敌人攻击音效
+        yield return new WaitForSeconds(config.enemyAttackSoundDelay);
+        if (config.enemyAttackSound != null && audioManager != null)
         {
-            // 更新DOT效果
-            iconManager.UpdateEnemyEffect(
-                IconManager.EffectCategory.EnemyDot,
-                0, // 叠层数
-                dot.duration
-            );
+            Debug.Log("Playing enemy attack sound");
+            audioManager.PlaySoundEffect(config.enemyAttackSound);
+        }
+
+        // 3. 播放玩家受击动画
+        yield return new WaitForSeconds(config.playerHitSoundDelay);
+        if (animationManager != null)
+        {
+            Debug.Log("Playing player hit animation");
+            animationManager.PlayPlayerHit();
+            // 等待动画完成
+            while (animationManager.IsPlayerAnimating())
+            {
+                yield return null;
+            }
+        }
+
+        // 4. 播放玩家受击音效
+        if (config.playerHitSound != null && audioManager != null)
+        {
+            Debug.Log("Playing player hit sound");
+            audioManager.PlaySoundEffect(config.playerHitSound);
+        }
+
+        // 5. 计算并应用敌人伤害
+        if (playerManager != null && enemyManager != null)
+        {
+            float damage = enemyManager.CalculateDamage(playerManager.Defense);
+            playerManager.TakeDamage(damage);
+
+            uiManager.UpdatePlayerStatus(playerManager.Health, playerManager.MaxHealth, playerManager.Attack, playerManager.Defense);
+
+            if (playerManager.Health <= 0)
+            {
+                EndBattle(false);
+                yield break;
+            }
         }
     }
 
-    void EndBattle(bool playerWins)
+    private IEnumerator HandleEnemyDefendSequence()
     {
-        currentState = BattleState.BattleEnd;
-        onBattleEnd?.Invoke();
-        AddLog(playerWins ? "VICTORY!" : "DEFEAT...");
+        // 播放敌人技能动画（防御）
+        if (animationManager != null)
+        {
+            Debug.Log("Playing enemy defend skill animation");
+            animationManager.PlayEnemySkill();
+            // 等待动画完成
+            while (animationManager.IsEnemyAnimating())
+            {
+                yield return null;
+            }
+        }
 
-        // 清除所有效果
-        if (iconManager != null) iconManager.ClearAllEffects();
+        // 播放敌人技能音效
+        yield return new WaitForSeconds(config.enemySkillSoundDelay);
+        if (config.enemySkillSound != null && audioManager != null)
+        {
+            Debug.Log("Playing enemy skill sound");
+            audioManager.PlaySoundEffect(config.enemySkillSound);
+        }
+
+        if (enemyManager != null)
+        {
+            Debug.Log("Enemy enabling defense");
+            enemyManager.EnableDefense();
+        }
+
+        if (uiManager != null)
+        {
+            uiManager.UpdateBattleLog("Enemy defends, reducing incoming damage.");
+        }
+
+        yield return null;
+    }
+
+    private IEnumerator HandleEnemyChargeSequence()
+    {
+        // 播放敌人技能动画（蓄力）
+        if (animationManager != null)
+        {
+            Debug.Log("Playing enemy charge skill animation");
+            animationManager.PlayEnemySkill();
+            // 等待动画完成
+            while (animationManager.IsEnemyAnimating())
+            {
+                yield return null;
+            }
+        }
+
+        // 播放敌人技能音效
+        yield return new WaitForSeconds(config.enemySkillSoundDelay);
+        if (config.enemySkillSound != null && audioManager != null)
+        {
+            Debug.Log("Playing enemy skill sound");
+            audioManager.PlaySoundEffect(config.enemySkillSound);
+        }
+
+        if (enemyManager != null)
+        {
+            Debug.Log("Enemy charging attack");
+            enemyManager.ChargeAttack();
+        }
+
+        if (uiManager != null)
+        {
+            uiManager.UpdateBattleLog("Enemy charges, permanently increasing its attack!");
+        }
+
+        yield return null;
+    }
+
+    void Update()
+    {
+        // Debugging section is removed
+    }
+
+    // 新增：重新开始战斗方法（简化BGM控制）
+    public void RestartBattle()
+    {
+        Debug.Log("Restarting battle...");
+
+        // 重置战斗状态
+        currentState = BattleState.PlayerSetup;
+        currentRound = 1;
+        isBattleInitialized = false;
+
+        // 重置所有系统
+        if (playerManager != null)
+        {
+            playerManager.ResetPlayerState(config, iconManager);
+        }
+
+        if (enemyManager != null)
+        {
+            enemyManager.ResetEnemyState(config);
+        }
+
+        if (wheelSystem != null)
+        {
+            wheelSystem.ResetBaseMaxPoints();
+            wheelSystem.ResetRetainedPoints();
+        }
+
+        if (retainedPointsSystem != null)
+        {
+            retainedPointsSystem.ResetCalculatedRetainedPoints();
+        }
+
+        if (effectManager != null)
+        {
+            // 清除所有效果
+        }
+
+        // 简化BGM处理：重新播放BGM
+        if (audioManager != null)
+        {
+            if (config.backgroundMusic != null)
+            {
+                audioManager.PlayBackgroundMusic(config.backgroundMusic);
+            }
+        }
+
+        // 更新UI
+        if (uiManager != null)
+        {
+            uiManager.UpdateRoundDisplay(currentRound);
+            if (playerManager != null)
+            {
+                uiManager.UpdatePlayerStatus(playerManager.Health, playerManager.MaxHealth, playerManager.Attack, playerManager.Defense);
+            }
+            if (enemyManager != null)
+            {
+                uiManager.UpdateEnemyStatus(enemyManager.Health, enemyManager.MaxHealth);
+            }
+            uiManager.ClearBattleLog();
+            uiManager.HideStackInsufficientPanel(); // 隐藏叠层不足提示面板
+        }
+
+        // 重新初始化战斗
+        StartPlayerSetup();
     }
 }
