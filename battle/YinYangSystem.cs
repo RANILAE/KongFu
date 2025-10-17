@@ -7,6 +7,12 @@ public class YinYangSystem : MonoBehaviour
 
     public void ApplyBattleEffects(PlayerData player, EnemyData enemy, BattleConfig config)
     {
+        // 重置本回合状态效果
+        player.counterStrikeActive = false;
+        player.nextTurnAttackDebuff = false;
+        player.nextTurnDefenseDebuff = false;
+        player.counterStrikeMultiplier = 1.0f;
+
         int yinPoints = player.defense;
         int yangPoints = player.attack;
         int diff = yangPoints - yinPoints; // 阳点数 - 阴点数
@@ -29,9 +35,6 @@ public class YinYangSystem : MonoBehaviour
                 // 重置叠层
                 player.ResetExtremeYangStack();
                 BattleEventSystem.OnBattleLog.Invoke("Extreme Yang activated!");
-
-                // 设置下回合攻击下降
-                player.nextTurnAttackDebuff = true;
             }
             else
             {
@@ -60,11 +63,8 @@ public class YinYangSystem : MonoBehaviour
                 player.ResetExtremeYinStack();
                 BattleEventSystem.OnBattleLog.Invoke("Extreme Yin activated!");
 
-                // 设置下回合防御下降
-                player.nextTurnDefenseDebuff = true;
-
-                // 激活反震效果
-                player.ActivateCounterStrike(1.5f);
+                // 修复：确保激活反震效果
+                player.ActivateCounterStrike(1.5f); // 极端阴使用1.5倍反震
                 BattleEventSystem.OnBattleLog.Invoke("Extreme Yin activated! Counterstrike effect applied");
             }
             else
@@ -87,7 +87,17 @@ public class YinYangSystem : MonoBehaviour
             player.attack = Mathf.FloorToInt(config.yangShengAttackMultiplier * originalYang);
             player.defense = Mathf.FloorToInt(config.yangShengDefenseMultiplier * originalYin);
 
-            BattleEventSystem.OnBattleLog.Invoke("Yang Sheng activated!");
+            // 添加DOT效果
+            int dotDamage = Mathf.FloorToInt(originalYang / 2f);
+            if (dotDamage > 0)
+            {
+                player.activeDots.Add(new PlayerData.DotEffect
+                {
+                    damage = dotDamage,
+                    duration = 2
+                });
+                BattleEventSystem.OnBattleLog.Invoke($"Yang Sheng DOT applied: {dotDamage} damage per turn for 2 turns");
+            }
             return;
         }
 
