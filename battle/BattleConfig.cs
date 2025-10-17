@@ -1,69 +1,75 @@
 using UnityEngine;
 
-[CreateAssetMenu(fileName = "BattleConfig", menuName = "Battle/BattleConfig")]
+[CreateAssetMenu(fileName = "BattleConfig", menuName = "Battle/Battle Config")]
 public class BattleConfig : ScriptableObject
 {
-    [Header("Player Settings")]
-    public int playerBaseHealth = 40;
-    public int playerBaseQiPoints = 7;
+    [Header("Player Base Attributes")]
+    public int playerBaseHealth = 100;
 
-    [Header("Enemy Settings")]
+    [Header("Enemy Base Attributes")]
     public int enemyBaseHealth = 40;
     public int enemyBaseAttack = 7;
 
-    [Header("YinYang Settings")]
-    // Yang Sheng coefficients
-    public float yangShengAttackMultiplier = 2.75f;
-    public float yangShengDefenseMultiplier = 1.25f;
+    [Header("Yin-Yang Points")]
+    [Tooltip("Maximum points for Yin and Yang")]
+    public int maxPoints = 7; // 点数上限
 
-    // Yin Sheng coefficients
-    public float yinShengDefenseMultiplier = 2.5f;
+    [Header("Yin-Yang State Multipliers")]
+    [Tooltip("Balance state multipliers")]
+    public Vector2 balanceMultipliers = new Vector2(1.25f, 1.25f);
 
-    // Balance coefficient
-    public float balanceMultiplier = 1.25f;
+    [Tooltip("Critical Yang state multipliers")]
+    public Vector2 criticalYangMultipliers = new Vector2(1.75f, 1.25f);
 
-    // Critical Yang coefficients
-    public float criticalYangAttackMultiplier = 1.75f;
-    public float criticalYangDefenseMultiplier = 1.25f;
+    [Tooltip("Critical Yin state multipliers")]
+    public Vector2 criticalYinMultipliers = new Vector2(1.25f, 1.75f);
 
-    // Critical Yin coefficients
-    public float criticalYinAttackMultiplier = 1.25f;
-    public float criticalYinDefenseMultiplier = 1.75f;
+    [Tooltip("Yang Prosperity state multipliers")]
+    public Vector2 yangProsperityMultipliers = new Vector2(2.75f, 1.25f);
 
-    // Extreme Yang coefficients
-    public float extremeYangAttackMultiplier = 4.5f;
-    public float extremeYangDefenseMultiplier = 0.5f;
+    [Tooltip("Yin Prosperity state multipliers")]
+    public Vector2 yinProsperityMultipliers = new Vector2(1.0f, 2.5f);
 
-    // Extreme Yin coefficients
-    public float extremeYinDefenseMultiplier = 3.0f;
+    [Tooltip("Extreme Yang state multipliers")]
+    public Vector2 extremeYangMultipliers = new Vector2(4.5f, 0.5f);
 
-    [Header("Critical Stack Settings")]
-    public int criticalStacksRequired = 3;
+    [Tooltip("Extreme Yin state multipliers")]
+    public Vector2 extremeYinMultipliers = new Vector2(1.0f, 3.0f);
 
-    [Header("Battle Settings")]
-    public int maxLogLines = 10; // 最大日志行数
-    public int maxLogEntriesPerTurn = 5; // 每回合最大日志条目数
+    [Tooltip("Ultimate Qi state multipliers")]
+    public Vector2 ultimateQiMultipliers = new Vector2(7.0f, 7.0f);
 
-    [Header("Animation Settings")]
-    public float attackAnimationDuration = 0.5f;
-    public float damageAnimationDuration = 0.3f;
+    [Header("Balance State Healing")]
+    public int balanceHealAmount = 5;
+    public int balanceHealCooldown = 2;
 
-    [Header("Audio Settings")]
-    public AudioClip attackSound;
-    public AudioClip damageSound;
-    public AudioClip chargeSound;
-    public AudioClip defenseSound;
-    public AudioClip victorySound;
-    public AudioClip defeatSound;
+    [Header("Counter Strike Configuration")]
+    public float counterStrikeSuccessMultiplier = 1.0f;
+    public float counterStrikeFailureMultiplier = 1.5f;
+    public int counterStrikeFailureDotDamage = 2;
+    public int counterStrikeFailureDotDuration = 2;
 
-    [Header("Icon Settings")]
-    public Sprite yangStackIcon;           // 阳叠层图标
-    public Sprite yinStackIcon;            // 阴叠层图标
-    public Sprite extremeYangDebuffIcon;   // 极端阳debuff图标（攻击下降）
-    public Sprite extremeYinDebuffIcon;    // 极端阴debuff图标（防御下降）
-    public Sprite playerDotIcon;           // 玩家受到的DOT伤害图标
-    public Sprite enemyDotIcon;            // 敌人受到的DOT伤害图标
-    public Sprite counterStrikeIcon;       // 反震效果图标
-    public Sprite yangPenetrationIcon;     // 新增：阳穿透效果图标
-    public Sprite yinCoverIcon;            // 新增：阴覆盖效果图标
+    [Header("Extreme State Configuration")]
+    public int extremeStacksRequired = 3;
+    public int extremeYangBonusPerStack = 2;
+    public int extremeYinAttackReducePerStack = 2;
+    public int extremeDebuffDuration = 2;
+
+    [Header("Ultimate Qi Configuration")]
+    public int ultimateQiHealthSet = 1;
+
+    [Header("Points Retention Mechanism")]
+    [Tooltip("Points retention factor")]
+    public float pointsRetentionFactor = 0.5f;
+
+    [Header("Animation Configuration")]
+    public AnimationClip playerAttackAnim;
+    public AnimationClip playerDefendAnim;
+    public AnimationClip playerHitAnim;
+    public AnimationClip enemyAttackAnim;
+    public AnimationClip enemyDefendAnim;
+    public AnimationClip enemyChargeAnim;
+    public AnimationClip enemyHitAnim;
+    public AnimationClip victoryAnim;
+    public AnimationClip defeatAnim;
 }
